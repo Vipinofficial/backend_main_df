@@ -83,7 +83,7 @@ function readAuthUser(request) {
     }
 
     return {
-      id: String(payload.sub),
+      id: payload.sub,
       name: String(payload.name || ''),
       email: String(payload.email || ''),
     };
@@ -92,10 +92,19 @@ function readAuthUser(request) {
   }
 }
 
+function formatUser(mongoUser) {
+  if (!mongoUser) return null;
+  return {
+    id: mongoUser._id.toString(),
+    name: mongoUser.name,
+    email: mongoUser.email,
+  };
+}
+
 app.get('/api/health', async (_req, res) => {
   const db = await getDb();
-  const row = await db.get('SELECT COUNT(*) AS userCount FROM users');
-  res.json({ ok: true, userCount: row?.userCount ?? 0 });
+  const userCount = await db.collection('users').countDocuments();
+  res.json({ ok: true, userCount });
 });
 
 app.post('/api/auth/signup', async (req, res) => {
@@ -111,19 +120,19 @@ app.post('/api/auth/signup', async (req, res) => {
 
   const normalizedEmail = String(email).trim().toLowerCase();
   const db = await getDb();
-  const existingUser = await db.get('SELECT id FROM users WHERE email = ?', normalizedEmail);
+  const existingUser = await db.collection('users').findOne({ email: normalizedEmail });
 
   if (existingUser) {
     return res.status(409).json({ message: 'Email already registered.' });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  await db.run(
-    'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
-    String(name).trim(),
-    normalizedEmail,
-    passwordHash,
-  );
+  await db.collection('users').insertOne({
+    name: String(name).trim(),
+    email: normalizedEmail,
+    password_hash: passwordHash,
+    created_at: new Date(),
+  });
 
   return res.status(201).json({ message: 'Account created successfully.' });
 });
@@ -137,7 +146,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   const normalizedEmail = String(email).trim().toLowerCase();
   const db = await getDb();
-  const user = await db.get('SELECT id, name, email, password_hash FROM users WHERE email = ?', normalizedEmail);
+  const user = await db.collection('users').findOne({ email: normalizedEmail });
 
   if (!user) {
     return res.status(401).json({ message: 'Invalid email or password.' });
@@ -149,7 +158,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const sessionUser = {
-    id: user.id,
+    id: user._id.toString(),
     name: user.name,
     email: user.email,
   };

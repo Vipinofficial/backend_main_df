@@ -1,29 +1,30 @@
-import path from 'path';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import { MongoClient } from 'mongodb';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 let db;
+let client;
 
 export async function getDb() {
   if (db) {
     return db;
   }
 
-  const dbPath = path.join(process.cwd(), 'data.sqlite');
-  db = await open({
-    filename: dbPath,
-    driver: sqlite3.Database,
-  });
+  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+  client = new MongoClient(uri);
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
+  await client.connect();
+  db = client.db('df_main');
+
+  // Create users collection with unique email index
+  const collections = await db.listCollections().toArray();
+  const collectionNames = collections.map(c => c.name);
+
+  if (!collectionNames.includes('users')) {
+    await db.createCollection('users');
+    await db.collection('users').createIndex({ email: 1 }, { unique: true });
+  }
 
   return db;
 }
