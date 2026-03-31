@@ -10,9 +10,12 @@ dotenv.config();
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3100,http://localhost:3200,http://localhost:3300,http://localhost:3400,http://localhost:3500,http://localhost:3600,http://localhost:3700')
+const defaultCorsOrigins =
+  'http://localhost:3000,http://localhost:3100,http://localhost:3200,http://localhost:3300,http://localhost:3400,http://localhost:3500,http://localhost:3600,http://localhost:3700,https://devfrogs.com,https://www.devfrogs.com';
+const normalizeOrigin = (origin) => origin.trim().replace(/\/+$/, '').toLowerCase();
+const allowedOrigins = (process.env.CORS_ORIGIN || defaultCorsOrigins)
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
 const authJwtSecret = process.env.AUTH_JWT_SECRET || 'change-me-in-production';
 const authCookieName = process.env.AUTH_COOKIE_NAME || 'sso_token';
@@ -25,12 +28,12 @@ const authTokenTtl = process.env.AUTH_TOKEN_TTL || '7d';
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
         callback(null, true);
         return;
       }
 
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     },
     credentials: true,
   }),
